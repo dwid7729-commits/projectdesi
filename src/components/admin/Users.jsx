@@ -1,17 +1,15 @@
 import React, { useState } from 'react'
 import { useUsers } from '../../hooks/useUsers'
 import { useAuth } from '../../context/AuthContext'
-import { supabase } from '../../lib/supabase'
 
 export default function Users() {
-  const { users, loading, addUser, updateUser, deleteUser } = useUsers()
+  const { users, loading, updateUser } = useUsers()
   const { profile } = useAuth()
   const [showModal, setShowModal] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
-    password: '',
     role: 'user',
     department: '',
     access_level: 1,
@@ -26,7 +24,6 @@ export default function Users() {
     setFormData({
       full_name: '',
       email: '',
-      password: '',
       role: 'user',
       department: '',
       access_level: 1,
@@ -38,17 +35,11 @@ export default function Users() {
     setFormError('')
   }
 
-  const openAddModal = () => {
-    resetForm()
-    setShowModal(true)
-  }
-
   const openEditModal = (user) => {
     setEditingUser(user)
     setFormData({
       full_name: user.full_name || '',
       email: user.email || '',
-      password: '',
       role: user.role || 'user',
       department: user.department || '',
       access_level: user.access_level || 1,
@@ -72,35 +63,16 @@ export default function Users() {
         throw new Error('Email is required')
       }
 
-      if (editingUser) {
-        const updateData = {
-          full_name: formData.full_name.trim(),
-          role: formData.role,
-          department: formData.department.trim(),
-          access_level: parseInt(formData.access_level),
-          employee_id: formData.employee_id.trim(),
-          phone: formData.phone.trim(),
-          location: formData.location.trim()
-        }
-        await updateUser(editingUser.id, updateData)
-      } else {
-        if (!formData.password || formData.password.length < 6) {
-          throw new Error('Password must be at least 6 characters')
-        }
-
-        const userData = {
-          full_name: formData.full_name.trim(),
-          email: formData.email.trim(),
-          password: formData.password,
-          role: formData.role,
-          department: formData.department.trim(),
-          access_level: parseInt(formData.access_level),
-          employee_id: formData.employee_id.trim(),
-          phone: formData.phone.trim(),
-          location: formData.location.trim()
-        }
-        await addUser(userData)
+      const updateData = {
+        full_name: formData.full_name.trim(),
+        role: formData.role,
+        department: formData.department.trim(),
+        access_level: parseInt(formData.access_level),
+        employee_id: formData.employee_id.trim(),
+        phone: formData.phone.trim(),
+        location: formData.location.trim()
       }
+      await updateUser(editingUser.id, updateData)
 
       setShowModal(false)
       resetForm()
@@ -108,21 +80,6 @@ export default function Users() {
       setFormError(err.message)
     } finally {
       setSubmitting(false)
-    }
-  }
-
-  const handleDelete = async (id, name, role) => {
-    if (role === 'admin') {
-      alert('Cannot delete admin user')
-      return
-    }
-    
-    if (!confirm(`Delete user ${name}?`)) return
-    
-    try {
-      await deleteUser(id)
-    } catch (err) {
-      alert('Failed to delete user: ' + err.message)
     }
   }
 
@@ -146,12 +103,11 @@ export default function Users() {
             Manage all users and their access levels ({users?.length || 0} users)
           </p>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={openAddModal}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="w-[15px] h-[15px]">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-          Add User
-        </button>
+        <div className="text-[13px] text-[#6b7383]">
+          <span className="bg-[#eef1fb] px-3 py-1 rounded-full text-[11px]">
+            🔗 Register baru via halaman Sign Up
+          </span>
+        </div>
       </div>
 
       {loading ? (
@@ -208,19 +164,8 @@ export default function Users() {
                               <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                             </svg>
                           </button>
-                          {user.id !== profile?.id && user.role !== 'admin' && (
-                            <button 
-                              onClick={() => handleDelete(user.id, user.full_name, user.role)}
-                              className="p-2 rounded-[8px] hover:bg-[#fde9ea] text-[#6b7383] hover:text-[#e0384c] transition-colors"
-                              title="Delete user"
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                              </svg>
-                            </button>
-                          )}
-                          {user.role === 'admin' && user.id !== profile?.id && (
-                            <span className="text-[10px] text-[#6b7383] font-medium">Protected</span>
+                          {user.id === profile?.id && (
+                            <span className="text-[10px] text-[#6b7383] font-medium">You</span>
                           )}
                         </div>
                       </td>
@@ -236,14 +181,12 @@ export default function Users() {
         </div>
       )}
 
-      {/* Modal Add/Edit User */}
+      {/* Modal Edit User */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-[20px] max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center p-6 border-b border-[#e7e9f2] sticky top-0 bg-white z-10">
-              <h3 className="text-[20px] font-extrabold">
-                {editingUser ? 'Edit User' : 'Add New User'}
-              </h3>
+              <h3 className="text-[20px] font-extrabold">Edit User</h3>
               <button 
                 onClick={() => { setShowModal(false); resetForm(); }}
                 className="p-2 rounded-full hover:bg-[#f8f9fc] text-[#6b7383]"
@@ -278,7 +221,7 @@ export default function Users() {
               </div>
 
               <div>
-                <label className="field-label">Email *</label>
+                <label className="field-label">Email</label>
                 <div className="input-group">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                     <rect x="2" y="4" width="20" height="16" rx="2"/>
@@ -288,36 +231,11 @@ export default function Users() {
                     type="email"
                     placeholder="user@company.com"
                     value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    required
-                    disabled={!!editingUser}
+                    disabled
                   />
                 </div>
-                {editingUser && (
-                  <p className="text-[11px] text-[#6b7383] mt-1">Email cannot be changed</p>
-                )}
+                <p className="text-[11px] text-[#6b7383] mt-1">Email tidak bisa diubah</p>
               </div>
-
-              {!editingUser && (
-                <div>
-                  <label className="field-label">Password *</label>
-                  <div className="input-group">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                      <rect x="3" y="11" width="18" height="10" rx="2"/>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                    </svg>
-                    <input
-                      type="password"
-                      placeholder="Min 6 characters"
-                      value={formData.password}
-                      onChange={(e) => setFormData({...formData, password: e.target.value})}
-                      minLength={6}
-                      required={!editingUser}
-                    />
-                  </div>
-                  <p className="text-[11px] text-[#6b7383] mt-1">Password must be at least 6 characters</p>
-                </div>
-              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -422,7 +340,7 @@ export default function Users() {
                   className="btn btn-primary flex-1"
                   disabled={submitting}
                 >
-                  {submitting ? 'Saving...' : (editingUser ? 'Update User' : 'Add User')}
+                  {submitting ? 'Saving...' : 'Update User'}
                 </button>
               </div>
             </form>

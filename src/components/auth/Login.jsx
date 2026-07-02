@@ -1,8 +1,11 @@
+## `src/components/auth/Login.jsx` - Full Code
+
+```jsx
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
-import { useUsers } from '../../hooks/useUsers'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../context/AuthContext'
+
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -18,7 +21,6 @@ export default function Login() {
   const [isRegister, setIsRegister] = useState(false)
   const [isForgotPassword, setIsForgotPassword] = useState(false)
   const { login, isAdmin } = useAuth()
-  const { addUser } = useUsers()
   const navigate = useNavigate()
 
   const handleLogin = async (e) => {
@@ -29,10 +31,12 @@ export default function Login() {
 
     try {
       const { data, error } = await login(email, password)
-      if (error) throw error
+      
+      if (error) {
+        throw error
+      }
 
-      await new Promise(resolve => setTimeout(resolve, 500))
-
+      // Cek role user
       const { data: profile } = await supabase
         .from('users')
         .select('role')
@@ -45,7 +49,7 @@ export default function Login() {
         navigate('/')
       }
     } catch (err) {
-      setError(err.message || 'Failed to sign in')
+      setError(err.message || 'Gagal login')
     } finally {
       setLoading(false)
     }
@@ -58,40 +62,61 @@ export default function Login() {
     setLoading(true)
 
     try {
-      if (!fullName.trim()) throw new Error('Full name is required')
-      if (!email.trim()) throw new Error('Email is required')
-      if (!password || password.length < 6) throw new Error('Password must be at least 6 characters')
-      if (!employeeId.trim()) throw new Error('Employee ID is required')
-      if (!department.trim()) throw new Error('Department is required')
+      if (!fullName.trim()) throw new Error('Nama lengkap wajib diisi')
+      if (!email.trim()) throw new Error('Email wajib diisi')
+      if (!password || password.length < 6) throw new Error('Password minimal 6 karakter')
+      if (!employeeId.trim()) throw new Error('ID Karyawan wajib diisi')
+      if (!department.trim()) throw new Error('Departemen wajib diisi')
 
-      // PAKE ADDUSER DARI HOOK - PAKE SERVICE ROLE, GA KENA RATE LIMIT!
-      await addUser({
-        email: email.trim(),
-        password: password,
-        full_name: fullName.trim(),
-        employee_id: employeeId.trim(),
-        department: department.trim(),
-        phone: phone.trim() || '',
-        location: location.trim() || ''
+      // Register ke Supabase Auth (tanpa service role)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim()
+          }
+        }
       })
 
-      setSuccess('Registration successful! You can now login.')
-      
-      // Reset form
-      setFullName('')
-      setEmail('')
-      setPassword('')
-      setEmployeeId('')
-      setDepartment('')
-      setPhone('')
-      setLocation('')
-      
-      setTimeout(() => {
-        setIsRegister(false)
-        setSuccess('')
-      }, 3000)
+      if (authError) throw authError
+
+      if (authData.user) {
+        // Insert manual ke users (trigger backup)
+        const { error: insertError } = await supabase
+          .from('users')
+          .upsert({
+            id: authData.user.id,
+            email: email.trim(),
+            full_name: fullName.trim(),
+            employee_id: employeeId.trim(),
+            department: department.trim(),
+            phone: phone.trim() || '',
+            location: location.trim() || '',
+            role: 'user'
+          }, { onConflict: 'id' })
+
+        if (insertError) {
+          console.error('Insert user error:', insertError)
+        }
+
+        setSuccess('Registrasi berhasil! Silakan cek email untuk konfirmasi.')
+        
+        setFullName('')
+        setEmail('')
+        setPassword('')
+        setEmployeeId('')
+        setDepartment('')
+        setPhone('')
+        setLocation('')
+        
+        setTimeout(() => {
+          setIsRegister(false)
+          setSuccess('')
+        }, 3000)
+      }
     } catch (err) {
-      setError(err.message || 'Failed to register')
+      setError(err.message || 'Gagal registrasi')
     } finally {
       setLoading(false)
     }
@@ -110,11 +135,11 @@ export default function Login() {
 
       if (error) throw error
 
-      setSuccess('Password reset email sent! Please check your inbox.')
+      setSuccess('Email reset password terkirim! Cek inbox Anda.')
       setIsForgotPassword(false)
       setEmail('')
     } catch (err) {
-      setError(err.message || 'Failed to send reset email')
+      setError(err.message || 'Gagal kirim email reset')
     } finally {
       setLoading(false)
     }
@@ -133,7 +158,7 @@ export default function Login() {
     setLocation('')
   }
 
-  // Login Form
+  // === LOGIN FORM ===
   if (!isRegister && !isForgotPassword) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f3f5fc] px-4">
@@ -145,15 +170,15 @@ export default function Login() {
                   <path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Z"/>
                 </svg>
               </span>
-              joki desi
+              SecurePermit
             </div>
-            <p className="text-[#6b7383] mt-2">absensi lebih mudah</p>
+            <p className="text-[#6b7383] mt-2">Enterprise Access Management</p>
           </div>
 
           <div className="card p-8">
             <form onSubmit={handleLogin}>
               <div className="mb-4">
-                <label className="field-label">Email Address</label>
+                <label className="field-label">Email</label>
                 <div className="input-group">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="4" width="20" height="16" rx="2"/>
@@ -161,7 +186,7 @@ export default function Login() {
                   </svg>
                   <input 
                     type="email" 
-                    placeholder="name@organization.com"
+                    placeholder="nama@perusahaan.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -177,7 +202,7 @@ export default function Login() {
                     onClick={() => setIsForgotPassword(true)}
                     className="text-[12px] text-[#1541c9] font-semibold hover:underline"
                   >
-                    Forgot Password?
+                    Lupa Password?
                   </button>
                 </div>
                 <div className="input-group">
@@ -187,7 +212,7 @@ export default function Login() {
                   </svg>
                   <input 
                     type={showPassword ? 'text' : 'password'} 
-                    placeholder="Enter your password"
+                    placeholder="Masukkan password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -222,7 +247,7 @@ export default function Login() {
                 className="btn btn-primary w-full"
                 disabled={loading}
               >
-                {loading ? 'Signing in...' : 'Sign In'}
+                {loading ? 'Masuk...' : 'Masuk'}
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" width="17" height="17">
                   <path d="M5 12h14M13 6l6 6-6 6"/>
                 </svg>
@@ -231,26 +256,26 @@ export default function Login() {
 
             <div className="mt-6 text-center">
               <p className="text-[#6b7383] text-[14px]">
-                Don't have an account?{' '}
+                Belum punya akun?{' '}
                 <button 
                   onClick={() => setIsRegister(true)}
                   className="text-[#1541c9] font-bold hover:underline"
                 >
-                  Sign Up
+                  Daftar
                 </button>
               </p>
             </div>
           </div>
 
           <div className="text-center text-[#9aa1b0] text-[12px] leading-relaxed mt-8">
-            © 2026 joki desi. All rights reserved.
+            © 2024 SecurePermit. All rights reserved.
           </div>
         </div>
       </div>
     )
   }
 
-  // Register Form
+  // === REGISTER FORM ===
   if (isRegister) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f3f5fc] px-4 py-8">
@@ -262,16 +287,16 @@ export default function Login() {
                   <path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Z"/>
                 </svg>
               </span>
-              joki desi
+              SecurePermit
             </div>
-            <p className="text-[#6b7383] mt-2">Create your account</p>
+            <p className="text-[#6b7383] mt-2">Buat akun baru</p>
           </div>
 
           <div className="card p-6">
             <form onSubmit={handleRegister} className="space-y-4">
               {/* Full Name */}
               <div>
-                <label className="field-label">Full Name *</label>
+                <label className="field-label">Nama Lengkap *</label>
                 <div className="input-group">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                     <path d="M20 21a8 8 0 0 0-16 0"/>
@@ -289,7 +314,7 @@ export default function Login() {
 
               {/* Email */}
               <div>
-                <label className="field-label">Email Address *</label>
+                <label className="field-label">Email *</label>
                 <div className="input-group">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                     <rect x="2" y="4" width="20" height="16" rx="2"/>
@@ -297,7 +322,7 @@ export default function Login() {
                   </svg>
                   <input 
                     type="email" 
-                    placeholder="name@organization.com"
+                    placeholder="nama@perusahaan.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -315,7 +340,7 @@ export default function Login() {
                   </svg>
                   <input 
                     type={showPassword ? 'text' : 'password'} 
-                    placeholder="Min 6 characters"
+                    placeholder="Minimal 6 karakter"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     minLength={6}
@@ -332,12 +357,12 @@ export default function Login() {
                     </svg>
                   </button>
                 </div>
-                <p className="text-[11px] text-[#6b7383] mt-1">Password must be at least 6 characters</p>
+                <p className="text-[11px] text-[#6b7383] mt-1">Password minimal 6 karakter</p>
               </div>
 
               {/* Employee ID */}
               <div>
-                <label className="field-label">Employee ID *</label>
+                <label className="field-label">ID Karyawan *</label>
                 <div className="input-group">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                     <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -355,7 +380,7 @@ export default function Login() {
 
               {/* Department */}
               <div>
-                <label className="field-label">Department *</label>
+                <label className="field-label">Departemen *</label>
                 <div className="input-group">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                     <rect x="3" y="3" width="18" height="18" rx="2"/>
@@ -363,7 +388,7 @@ export default function Login() {
                   </svg>
                   <input 
                     type="text" 
-                    placeholder="Engineering"
+                    placeholder="IT / HRD / Finance"
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
                     required
@@ -373,7 +398,7 @@ export default function Login() {
 
               {/* Phone */}
               <div>
-                <label className="field-label">Phone</label>
+                <label className="field-label">Telepon</label>
                 <div className="input-group">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.36 1.78.7 2.6a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.48-1.27a2 2 0 0 1 2.11-.45c.82.34 1.7.58 2.6.7A2 2 0 0 1 22 16.92Z"/>
@@ -389,7 +414,7 @@ export default function Login() {
 
               {/* Location */}
               <div>
-                <label className="field-label">Location</label>
+                <label className="field-label">Lokasi</label>
                 <div className="input-group">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                     <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
@@ -421,32 +446,32 @@ export default function Login() {
                 className="btn btn-primary w-full"
                 disabled={loading}
               >
-                {loading ? 'Creating account...' : 'Create Account'}
+                {loading ? 'Mendaftar...' : 'Daftar'}
               </button>
             </form>
 
             <div className="mt-6 text-center">
               <p className="text-[#6b7383] text-[14px]">
-                Already have an account?{' '}
+                Sudah punya akun?{' '}
                 <button 
                   onClick={resetForms}
                   className="text-[#1541c9] font-bold hover:underline"
                 >
-                  Sign In
+                  Masuk
                 </button>
               </p>
             </div>
           </div>
 
           <div className="text-center text-[#9aa1b0] text-[12px] leading-relaxed mt-6">
-            © 2024 joki desi. All rights reserved.
+            © 2024 SecurePermit. All rights reserved.
           </div>
         </div>
       </div>
     )
   }
 
-  // Forgot Password Form
+  // === FORGOT PASSWORD FORM ===
   if (isForgotPassword) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f3f5fc] px-4">
@@ -458,15 +483,15 @@ export default function Login() {
                   <path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Z"/>
                 </svg>
               </span>
-              joki desi
+              SecurePermit
             </div>
-            <p className="text-[#6b7383] mt-2">Reset your password</p>
+            <p className="text-[#6b7383] mt-2">Reset password</p>
           </div>
 
           <div className="card p-8">
             <form onSubmit={handleForgotPassword}>
               <div className="mb-4">
-                <label className="field-label">Email Address</label>
+                <label className="field-label">Email</label>
                 <div className="input-group">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="2" y="4" width="20" height="16" rx="2"/>
@@ -474,7 +499,7 @@ export default function Login() {
                   </svg>
                   <input 
                     type="email" 
-                    placeholder="name@organization.com"
+                    placeholder="nama@perusahaan.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -499,7 +524,7 @@ export default function Login() {
                 className="btn btn-primary w-full"
                 disabled={loading}
               >
-                {loading ? 'Sending...' : 'Send Reset Link'}
+                {loading ? 'Mengirim...' : 'Kirim Link Reset'}
               </button>
             </form>
 
@@ -508,16 +533,17 @@ export default function Login() {
                 onClick={resetForms}
                 className="text-[#1541c9] font-bold text-[14px] hover:underline"
               >
-                ← Back to Sign In
+                ← Kembali ke Login
               </button>
             </div>
           </div>
 
           <div className="text-center text-[#9aa1b0] text-[12px] leading-relaxed mt-8">
-            © 2024 joki desi. All rights reserved.
+            © 2024 SecurePermit. All rights reserved.
           </div>
         </div>
       </div>
     )
   }
 }
+```
