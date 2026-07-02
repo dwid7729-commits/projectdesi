@@ -7,16 +7,25 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase credentials')
 }
 
+// Hanya SATU Supabase Client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export const getCurrentUser = async () => {
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+
+  return { user, error }
 }
 
 export const getSession = async () => {
-  const { data: { session } } = await supabase.auth.getSession()
-  return session
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession()
+
+  return { session, error }
 }
 
 export const signInWithEmail = async (email, password) => {
@@ -24,6 +33,10 @@ export const signInWithEmail = async (email, password) => {
     email,
     password,
   })
+
+  console.log("LOGIN DATA:", data)
+  console.log("LOGIN ERROR:", error)
+
   return { data, error }
 }
 
