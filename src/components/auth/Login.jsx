@@ -1,6 +1,3 @@
-## `src/components/auth/Login.jsx` - Full Code
-
-```jsx
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
@@ -36,7 +33,6 @@ export default function Login() {
         throw error
       }
 
-      // Cek role user
       const { data: profile } = await supabase
         .from('users')
         .select('role')
@@ -68,7 +64,6 @@ export default function Login() {
       if (!employeeId.trim()) throw new Error('ID Karyawan wajib diisi')
       if (!department.trim()) throw new Error('Departemen wajib diisi')
 
-      // Register ke Supabase Auth (tanpa service role)
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
@@ -82,7 +77,6 @@ export default function Login() {
       if (authError) throw authError
 
       if (authData.user) {
-        // Insert manual ke users (trigger backup)
         const { error: insertError } = await supabase
           .from('users')
           .upsert({
@@ -294,7 +288,6 @@ export default function Login() {
 
           <div className="card p-6">
             <form onSubmit={handleRegister} className="space-y-4">
-              {/* Full Name */}
               <div>
                 <label className="field-label">Nama Lengkap *</label>
                 <div className="input-group">
@@ -312,7 +305,6 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Email */}
               <div>
                 <label className="field-label">Email *</label>
                 <div className="input-group">
@@ -330,7 +322,6 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Password */}
               <div>
                 <label className="field-label">Password *</label>
                 <div className="input-group">
@@ -360,7 +351,6 @@ export default function Login() {
                 <p className="text-[11px] text-[#6b7383] mt-1">Password minimal 6 karakter</p>
               </div>
 
-              {/* Employee ID */}
               <div>
                 <label className="field-label">ID Karyawan *</label>
                 <div className="input-group">
@@ -378,7 +368,6 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Department */}
               <div>
                 <label className="field-label">Departemen *</label>
                 <div className="input-group">
@@ -396,7 +385,6 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Phone */}
               <div>
                 <label className="field-label">Telepon</label>
                 <div className="input-group">
@@ -412,7 +400,6 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Location */}
               <div>
                 <label className="field-label">Lokasi</label>
                 <div className="input-group">
@@ -546,4 +533,3 @@ export default function Login() {
     )
   }
 }
-```
