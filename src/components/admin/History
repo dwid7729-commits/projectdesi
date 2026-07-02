@@ -1,0 +1,163 @@
+import React, { useState, useEffect } from 'react'
+import { supabase } from '../../lib/supabase'
+
+export default function History() {
+  const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('all')
+  const [debug, setDebug] = useState({})
+
+  useEffect(() => {
+    fetchHistory()
+  }, [filter])
+
+  const fetchHistory = async () => {
+    setLoading(true)
+    const debugInfo = {}
+    
+    try {
+      // 1. Ambil users
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('id, full_name, email, employee_id, department')
+
+      debugInfo.users = { count: usersData?.length || 0, error: usersError?.message }
+      console.log('📊 Users:', usersData)
+
+      // 2. Ambil scans
+      let query = supabase
+        .from('scans')
+        .select('*')
+        .order('scan_time', { ascending: false })
+        .limit(100)
+
+      if (filter === 'granted') {
+        query = query.eq('status', 'granted')
+      } else if (filter === 'denied') {
+        query = query.eq('status', 'denied')
+      }
+
+      const { data: scansData, error: scansError } = await query
+
+      debugInfo.scans = { count: scansData?.length || 0, error: scansError?.message }
+      console.log('📊 Scans:', scansData)
+
+      // 3. Gabungkan
+      const enrichedData = scansData?.map(item => {
+        const user = usersData?.find(u => u.id === item.user_id)
+        return {
+          ...item,
+          full_name: user?.full_name || 'Unknown',
+          employee_id: user?.employee_id || '-',
+          department: user?.department || '-'
+        }
+      }) || []
+
+      debugInfo.enriched = { count: enrichedData.length }
+      console.log('📊 Enriched:', enrichedData)
+      
+      setHistory(enrichedData)
+      setDebug(debugInfo)
+
+    } catch (error) {
+      console.error('❌ Error:', error)
+      debugInfo.error = error.message
+      setDebug(debugInfo)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getStatusBadge = (status) => {
+    if (status === 'granted') {
+      return <span className="px-3 py-1 rounded-full bg-[#e4f8ec] text-[#1a9a53] text-[11px] font-bold">✅ Berhasil</span>
+    }
+    return <span className="px-3 py-1 rounded-full bg-[#fde9ea] text-[#e0384c] text-[11px] font-bold">❌ Gagal</span>
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-start flex-wrap gap-4 mb-7">
+        <div>
+          <h1 className="text-[32px] font-extrabold tracking-[-.02em]">Riwayat Scan</h1>
+          <p className="text-[#6b7383] text-[14.5px] mt-1.5">Data scan semua karyawan</p>
+        </div>
+        <div className="flex gap-2">
+          <select
+            className="px-4 py-2 rounded-[12px] bg-[#eef1fb] border border-transparent focus:border-[#3b63f0] focus:bg-white outline-none text-[14px]"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option value="all">Semua</option>
+            <option value="granted">Berhasil</option>
+            <option value="denied">Gagal</option>
+          </select>
+          <button onClick={fetchHistory} className="btn btn-ghost btn-sm">
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* DEBUG PANEL */}
+      <div className="mb-4 p-4 bg-[#fdf3dc] rounded-[12px] border border-[#c78a12]">
+        <div className="font-bold text-[#c78a12]">🐞 DEBUG INFO</div>
+        <div className="text-[12px] text-[#6b7383] mt-1 space-y-1">
+          <div>Users: {debug.users?.count || 0} data</div>
+          <div>Scans: {debug.scans?.count || 0} data</div>
+          <div>Enriched: {debug.enriched?.count || 0} data</div>
+          <div>Filter: {filter}</div>
+          {debug.error && <div className="text-[#e0384c]">❌ Error: {debug.error}</div>}
+          {debug.users?.error && <div className="text-[#e0384c]">❌ Users Error: {debug.users.error}</div>}
+          {debug.scans?.error && <div className="text-[#e0384c]">❌ Scans Error: {debug.scans.error}</div>}
+        </div>
+        {history.length > 0 && (
+          <div className="text-[11px] text-[#1a9a53] mt-1">
+            ✅ Data siap ditampilkan: {history.length} scan
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12 text-[#6b7383]">Memuat data...</div>
+      ) : (
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[#f8f9fc] border-b border-[#e7e9f2]">
+                <tr>
+                  <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">Karyawan</th>
+                  <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">ID</th>
+                  <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">Lokasi Scan</th>
+                  <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">Tanggal</th>
+                  <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">Waktu</th>
+                  <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="text-center py-12 text-[#6b7383]">Tidak ada data scan</td>
+                  </tr>
+                ) : (
+                  history.map((item) => (
+                    <tr key={item.id} className="border-b border-[#e7e9f2] hover:bg-[#f8f9fc]">
+                      <td className="px-6 py-3 font-semibold">{item.full_name}</td>
+                      <td className="px-6 py-3 text-[#6b7383]">{item.employee_id}</td>
+                      <td className="px-6 py-3 text-[#6b7383]">{item.location || 'Kantor'}</td>
+                      <td className="px-6 py-3 text-[#6b7383]">{new Date(item.scan_time).toLocaleDateString('id-ID')}</td>
+                      <td className="px-6 py-3 text-[#6b7383]">{new Date(item.scan_time).toLocaleTimeString('id-ID')}</td>
+                      <td className="px-6 py-3">{getStatusBadge(item.status)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-6 py-4 border-t border-[#e7e9f2] text-[13px] text-[#6b7383]">
+            Total: {history.length} data
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
