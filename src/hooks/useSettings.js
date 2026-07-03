@@ -4,54 +4,46 @@ import { supabase } from '../lib/supabase'
 export function useSettings() {
   const [settings, setSettings] = useState({
     location_radius: { value: 100, unit: 'meters' },
-    office_location: { lat: -6.2088, lng: 106.8456 },
+    office_location: { lat: -7.05235730, lng: 110.42768660 },
     allow_selfie: { enabled: true },
     qr_expiry: { minutes: 5 }
   })
   const [loading, setLoading] = useState(true)
 
   const fetchSettings = useCallback(async () => {
-  try {
-    setLoading(true)
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('settings')
+        .select('key, value')
 
-    const { data, error } = await supabase
-      .from('settings')
-      .select('*')
+      if (error) throw error
 
-    if (error) throw error
-
-    console.log('=== RAW SETTINGS ===')
-    console.log(data)
-
-    const settingsMap = {}
-
-    data?.forEach(item => {
-      try {
-        settingsMap[item.key] =
-          typeof item.value === 'string'
-            ? JSON.parse(item.value)
+      const settingsMap = {}
+      data?.forEach(item => {
+        try {
+          settingsMap[item.key] = typeof item.value === 'string' 
+            ? JSON.parse(item.value) 
             : item.value
-      } catch {
-        settingsMap[item.key] = item.value
-      }
-    })
+        } catch {
+          settingsMap[item.key] = item.value
+        }
+      })
 
-    console.log('=== SETTINGS MAP ===')
-    console.log(settingsMap)
-    console.log('Office Location:', settingsMap.office_location)
-    console.log('Radius:', settingsMap.location_radius)
+      setSettings(prev => ({
+        ...prev,
+        ...settingsMap
+      }))
 
-    setSettings(prev => ({
-      ...prev,
-      ...settingsMap
-    }))
+      console.log('Settings loaded:', settingsMap)
 
-  } catch (err) {
-    console.error('Error fetching settings:', err)
-  } finally {
-    setLoading(false)
-  }
-}, [])
+    } catch (err) {
+      console.error('Error fetching settings:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchSettings()
   }, [fetchSettings])

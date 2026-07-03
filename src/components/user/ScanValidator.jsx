@@ -237,19 +237,11 @@ export default function ScanValidator() {
 
   // QR detected
   const onScanSuccess = async (decodedText) => {
-    // Cegah multiple scan
     if (processingRef.current || !user) return
-
-    // Cooldown
     if (Date.now() < scanCooldownUntilRef.current) return
 
-    // Lock
     processingRef.current = true
-
-    // Stop scanner dulu
     await stopScanner()
-
-    // Proses absensi
     await processAttendance()
   }
 
@@ -279,7 +271,6 @@ export default function ScanValidator() {
       department: currentUserData?.department || '-'
     }
 
-    // Cek GPS
     if (!currentLocation && !currentLocationError) {
       setScanResult({
         success: false,
@@ -320,7 +311,6 @@ export default function ScanValidator() {
       const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
       const qrCode = `ABSEN-${todayStr}-${user.id.substring(0, 6).toUpperCase()}`
 
-      // Cek sudah absen hari ini
       const { data: cekAbsenList, error: cekError } = await supabase
         .from('absensi')
         .select('id')
@@ -334,7 +324,6 @@ export default function ScanValidator() {
         throw new Error('Anda sudah absen hari ini!')
       }
 
-      // Simpan absensi
       const absensiData = {
         user_id: user.id,
         permit_code: qrCode,
@@ -445,19 +434,16 @@ export default function ScanValidator() {
     startWithDelay()
   }, [])
 
-  // CLOSE POPUP - Handler untuk tombol
   const closePopup = () => {
     setShowPopup(false)
     setScanResult(null)
     processingRef.current = false
 
-    // Kalo berhasil -> balik ke home
     if (scanResult?.success) {
       navigate('/')
       return
     }
 
-    // Kalo gagal -> restart scanner dengan cooldown
     scanCooldownUntilRef.current = Date.now() + 2000
 
     setTimeout(() => {
@@ -526,7 +512,7 @@ export default function ScanValidator() {
         )}
       </div>
 
-      {/* QR Scanner */}
+      {/* QR Scanner - KAMERA TETAP JALAN */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 bg-[#0b1220] relative min-h-[300px]">
         <div className="relative w-full max-w-[400px] aspect-square rounded-[20px] overflow-hidden bg-black">
           <div id="qr-reader-container" className="w-full h-full"></div>
