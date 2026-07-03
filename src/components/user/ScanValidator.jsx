@@ -59,7 +59,8 @@ export default function ScanValidator() {
           .select('full_name, email, employee_id, department, phone, location')
           .eq('id', user.id)
           .maybeSingle()
-
+console.log(error)
+console.log(data)
         if (!error && data) {
           setUserData(data)
         }
