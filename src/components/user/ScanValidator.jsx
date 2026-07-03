@@ -27,8 +27,8 @@ export default function ScanValidator() {
   const [isStarting, setIsStarting] = useState(false)
   const [gpsRetry, setGpsRetry] = useState(0)
 
-  const [officeLat, setOfficeLat] = useState(-6.2088)
-  const [officeLng, setOfficeLng] = useState(106.8456)
+  const [officeLat, setOfficeLat] = useState(-7.1377005)
+  const [officeLng, setOfficeLng] = useState(110.4118615)
   const [radius, setRadius] = useState(100)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
 
@@ -59,8 +59,7 @@ export default function ScanValidator() {
           .select('full_name, email, employee_id, department, phone, location')
           .eq('id', user.id)
           .maybeSingle()
-console.log(error)
-console.log(data)
+
         if (!error && data) {
           setUserData(data)
         }
@@ -72,196 +71,102 @@ console.log(data)
     fetchUserData()
   }, [user])
 
-  // Ambil setting lokasi - PAKE YANG INI
- // ============================
-// AMBIL SETTING DARI DATABASE
-// ============================
-useEffect(() => {
-  const fetchSettings = async () => {
-    try {
-      const { data, error } = await supabase
-  .from("settings")
-  .select("*")
+  // Ambil setting lokasi
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const { data: officeData, error: officeError } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'office_location')
+          .single()
 
-console.log("ERROR =", error)
-console.log("DATA =", data)
+        if (!officeError && officeData) {
+          let office = officeData.value
+          if (typeof office === 'string') office = JSON.parse(office)
+          setOfficeLat(office.lat || -7.1377005)
+          setOfficeLng(office.lng || 110.4118615)
+          console.log('Office loaded:', office)
+        }
 
-      let office = {
-        lat: -6.2088,
-        lng: 106.8456
+        const { data: radiusData, error: radiusError } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'location_radius')
+          .single()
+
+        if (!radiusError && radiusData) {
+          let radiusVal = radiusData.value
+          if (typeof radiusVal === 'string') radiusVal = JSON.parse(radiusVal)
+          setRadius(radiusVal.value || 100)
+          console.log('Radius loaded:', radiusVal)
+        }
+
+        setSettingsLoaded(true)
+
+      } catch (err) {
+        console.error('Fetch settings error:', err)
+        setSettingsLoaded(true)
       }
-
-      let radiusValue = 100
-
-      data?.forEach(item => {
-       if (item.key === "office_location") {
-
-    office =
-      typeof item.value === "string"
-        ? JSON.parse(item.value)
-        : item.value
-
-}
-
-       if (item.key === "location_radius") {
-
-    const radiusData =
-      typeof item.value === "string"
-        ? JSON.parse(item.value)
-        : item.value
-
-    radiusValue = radiusData.value
-}
-
-      setOfficeLat(office.lat)
-      setOfficeLng(office.lng)
-      setRadius(radiusValue)
-
-      console.log("=== SETTINGS LOADED ===")
-      console.log("Office :", office)
-      console.log("Radius :", radiusValue)
-
-    } catch (err) {
-      console.error("Fetch settings:", err)
-    } finally {
-      setSettingsLoaded(true)
     }
-  }
 
-  fetchSettings()
-}, [])
+    fetchSettings()
+  }, [])
 
+  // Request GPS
+  const requestGPS = () => {
+    if (!settingsLoaded) return
 
-// ============================
-// REQUEST GPS
-// ============================
-const requestGPS = (
-  lat = officeLat,
-  lng = officeLng,
-  rad = radius
-) => {
+    setLocationError('')
 
-  if (!settingsLoaded) return
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords
+          setLocation({ latitude, longitude })
 
-  setLocationError("")
+          const dist = getDistance(latitude, longitude, officeLat, officeLng)
+          setDistance(dist)
+          setIsWithinRadius(dist <= radius)
 
-  if (!navigator.geolocation) {
-    setLocationError("Geolocation tidak didukung browser.")
-    return
-  }
-
-  navigator.geolocation.getCurrentPosition(
-
-    (pos) => {
-
-      const { latitude, longitude } = pos.coords
-
-      setLocation({
-        latitude,
-        longitude
-      })
-
-      console.log("=== GPS ===")
-      console.log({
-        officeLat: lat,
-        officeLng: lng,
-        radius: rad,
-        userLat: latitude,
-        userLng: longitude
-      })
-
-      const dist = getDistance(
-        latitude,
-        longitude,
-        lat,
-        lng
-      )
-
-      console.log("Distance :", dist)
-
-      setDistance(dist)
-      setIsWithinRadius(dist <= rad)
-
-      if (dist > rad) {
-        setLocationError(
-          `Anda ${Math.round(dist)}m dari kantor. Maksimal ${rad}m.`
-        )
-      } else {
-        setLocationError("")
-      }
-
-      setGpsRetry(0)
-    },
-
-    (err) => {
-
-      console.error("GPS Error:", err)
-
-      switch (err.code) {
-
-        case 1:
-          setLocationError(
-            "GPS ditolak. Izinkan lokasi di browser."
-          )
-          break
-
-        case 2:
-          setLocationError(
-            "GPS tidak tersedia."
-          )
-          break
-
-        case 3:
-          setLocationError(
-            "GPS timeout."
-          )
-
-          if (gpsRetry < 3) {
-            setTimeout(() => {
-              setGpsRetry(prev => prev + 1)
-            }, 2000)
+          if (dist > radius) {
+            setLocationError(`Anda ${Math.round(dist)}m dari kantor. Maksimal ${radius}m.`)
+          } else {
+            setLocationError('')
           }
-
-          break
-
-        default:
-          setLocationError(
-            "Terjadi kesalahan GPS."
-          )
-      }
-
-    },
-
-    {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0
+          setGpsRetry(0)
+        },
+        (err) => {
+          console.error('GPS Error:', err)
+          if (err.code === 1) {
+            setLocationError('GPS ditolak. Izinkan lokasi di pengaturan browser.')
+          } else if (err.code === 2) {
+            setLocationError('GPS tidak tersedia. Coba nyalakan GPS HP Anda.')
+          } else if (err.code === 3) {
+            setLocationError('GPS timeout. Coba lagi.')
+            if (gpsRetry < 3) {
+              setTimeout(() => {
+                setGpsRetry(gpsRetry + 1)
+                requestGPS()
+              }, 2000)
+            }
+          } else {
+            setLocationError('Error GPS. Coba lagi.')
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      )
+    } else {
+      setLocationError('Geolocation tidak didukung browser ini.')
     }
+  }
 
-  )
-}
+  useEffect(() => {
+    if (settingsLoaded) {
+      requestGPS()
+    }
+  }, [settingsLoaded, gpsRetry])
 
-
-// ============================
-// REQUEST GPS SETELAH SETTING SIAP
-// ============================
-useEffect(() => {
-
-  if (!settingsLoaded) return
-
-  requestGPS(
-    officeLat,
-    officeLng,
-    radius
-  )
-
-}, [
-  settingsLoaded,
-  officeLat,
-  officeLng,
-  radius,
-  gpsRetry
-])
   // Start QR Scanner
   const startScanner = async () => {
     if (isStarting || scannerStartedRef.current) return
