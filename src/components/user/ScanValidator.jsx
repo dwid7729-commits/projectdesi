@@ -80,10 +80,11 @@ useEffect(() => {
   const fetchSettings = async () => {
     try {
       const { data, error } = await supabase
-        .from("settings")
-        .select("key,value")
+  .from("settings")
+  .select("*")
 
-      if (error) throw error
+console.log("ERROR =", error)
+console.log("DATA =", data)
 
       let office = {
         lat: -6.2088,
