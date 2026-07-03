@@ -77,38 +77,38 @@ export default function Login() {
       if (authError) throw authError
 
       if (authData.user) {
-        const { error: insertError } = await supabase
-          .from('users')
-          .upsert({
-            id: authData.user.id,
-            email: email.trim(),
-            full_name: fullName.trim(),
-            employee_id: employeeId.trim(),
-            department: department.trim(),
-            phone: phone.trim() || '',
-            location: location.trim() || '',
-            role: 'user'
-          }, { onConflict: 'id' })
+  const { error: insertError } = await supabase
+    .from('users')
+    .upsert({
+      id: authData.user.id,
+      email: email.trim(),
+      full_name: fullName.trim(),
+      employee_id: employeeId.trim(),
+      department: department.trim(),
+      phone: phone.trim() || '',
+      location: location.trim() || '',
+      role: 'user'
+    }, { onConflict: 'id' })
 
-        if (insertError) {
-          console.error('Insert user error:', insertError)
-        }
+  if (insertError) {
+    console.error('Insert user error:', insertError)
+  }
 
-        setSuccess('Registrasi berhasil! Silakan cek email untuk konfirmasi.')
-        
-        setFullName('')
-        setEmail('')
-        setPassword('')
-        setEmployeeId('')
-        setDepartment('')
-        setPhone('')
-        setLocation('')
-        
-        setTimeout(() => {
-          setIsRegister(false)
-          setSuccess('')
-        }, 3000)
-      }
+  setSuccess('Registrasi berhasil! Silakan cek email untuk konfirmasi.')
+
+  setFullName('')
+  setEmail('')
+  setPassword('')
+  setEmployeeId('')
+  setDepartment('')
+  setPhone('')
+  setLocation('')
+
+  setTimeout(() => {
+    setIsRegister(false)
+    setSuccess('')
+  }, 3000)
+}
     } catch (err) {
       setError(err.message || 'Gagal registrasi')
     } finally {
