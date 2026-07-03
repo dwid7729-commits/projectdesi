@@ -94,14 +94,24 @@ console.log("DATA =", data)
       let radiusValue = 100
 
       data?.forEach(item => {
-        if (item.key === "office_location") {
-          office = item.value
-        }
+       if (item.key === "office_location") {
 
-        if (item.key === "location_radius") {
-          radiusValue = item.value?.value ?? 100
-        }
-      })
+    office =
+      typeof item.value === "string"
+        ? JSON.parse(item.value)
+        : item.value
+
+}
+
+       if (item.key === "location_radius") {
+
+    const radiusData =
+      typeof item.value === "string"
+        ? JSON.parse(item.value)
+        : item.value
+
+    radiusValue = radiusData.value
+}
 
       setOfficeLat(office.lat)
       setOfficeLng(office.lng)
