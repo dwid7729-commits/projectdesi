@@ -164,9 +164,9 @@ export default function Login() {
                   <path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Z"/>
                 </svg>
               </span>
-              SecurePermit
+              jokidesi
             </div>
-            <p className="text-[#6b7383] mt-2">Enterprise Access Management</p>
+            <p className="text-[#6b7383] mt-2">keamanan tertinggi</p>
           </div>
 
           <div className="card p-8">
@@ -262,7 +262,7 @@ export default function Login() {
           </div>
 
           <div className="text-center text-[#9aa1b0] text-[12px] leading-relaxed mt-8">
-            © 2024 SecurePermit. All rights reserved.
+            © 2024 jokidesi. All rights reserved.
           </div>
         </div>
       </div>
@@ -281,7 +281,7 @@ export default function Login() {
                   <path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Z"/>
                 </svg>
               </span>
-              SecurePermit
+              jokidesi
             </div>
             <p className="text-[#6b7383] mt-2">Buat akun baru</p>
           </div>
@@ -451,7 +451,7 @@ export default function Login() {
           </div>
 
           <div className="text-center text-[#9aa1b0] text-[12px] leading-relaxed mt-6">
-            © 2024 SecurePermit. All rights reserved.
+            © 2024 jokidesi. All rights reserved.
           </div>
         </div>
       </div>
@@ -470,7 +470,7 @@ export default function Login() {
                   <path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Z"/>
                 </svg>
               </span>
-              SecurePermit
+              jokidesi
             </div>
             <p className="text-[#6b7383] mt-2">Reset password</p>
           </div>
@@ -526,7 +526,7 @@ export default function Login() {
           </div>
 
           <div className="text-center text-[#9aa1b0] text-[12px] leading-relaxed mt-8">
-            © 2024 SecurePermit. All rights reserved.
+            © 2024 jokidesi. All rights reserved.
           </div>
         </div>
       </div>

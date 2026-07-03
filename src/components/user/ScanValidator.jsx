@@ -71,34 +71,39 @@ export default function ScanValidator() {
     fetchUserData()
   }, [user])
 
-  // Ambil setting lokasi
+  // Ambil setting lokasi - PAKE YANG INI
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const { data, error } = await supabase
+        // Ambil office location
+        const { data: officeData, error: officeError } = await supabase
           .from('settings')
-          .select('key, value')
+          .select('value')
+          .eq('key', 'office_location')
+          .single()
 
-        if (error) throw error
-
-        const settingsMap = {}
-        data?.forEach(item => {
-          try {
-            settingsMap[item.key] = typeof item.value === 'string'
-              ? JSON.parse(item.value)
-              : item.value
-          } catch {
-            settingsMap[item.key] = item.value
-          }
-        })
-
-        if (settingsMap.office_location) {
-          setOfficeLat(settingsMap.office_location.lat || -6.2088)
-          setOfficeLng(settingsMap.office_location.lng || 106.8456)
+        if (officeError) {
+          console.error('Error office location:', officeError)
+        } else if (officeData) {
+          const office = officeData.value
+          setOfficeLat(office.lat || -6.2088)
+          setOfficeLng(office.lng || 106.8456)
+          console.log('Office location loaded:', office)
         }
 
-        if (settingsMap.location_radius) {
-          setRadius(settingsMap.location_radius.value || 100)
+        // Ambil radius
+        const { data: radiusData, error: radiusError } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'location_radius')
+          .single()
+
+        if (radiusError) {
+          console.error('Error radius:', radiusError)
+        } else if (radiusData) {
+          const radiusVal = radiusData.value
+          setRadius(radiusVal.value || 100)
+          console.log('Radius loaded:', radiusVal)
         }
 
         setSettingsLoaded(true)
@@ -512,7 +517,7 @@ export default function ScanValidator() {
         )}
       </div>
 
-      {/* QR Scanner - KAMERA TETAP JALAN */}
+      {/* QR Scanner */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 bg-[#0b1220] relative min-h-[300px]">
         <div className="relative w-full max-w-[400px] aspect-square rounded-[20px] overflow-hidden bg-black">
           <div id="qr-reader-container" className="w-full h-full"></div>
