@@ -11,36 +11,47 @@ export function useSettings() {
   const [loading, setLoading] = useState(true)
 
   const fetchSettings = useCallback(async () => {
-    try {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from('settings')
-        .select('*')
+  try {
+    setLoading(true)
 
-      if (error) throw error
+    const { data, error } = await supabase
+      .from('settings')
+      .select('*')
 
-      const settingsMap = {}
-      data?.forEach(item => {
-        try {
-          settingsMap[item.key] = typeof item.value === 'string' 
-            ? JSON.parse(item.value) 
+    if (error) throw error
+
+    console.log('=== RAW SETTINGS ===')
+    console.log(data)
+
+    const settingsMap = {}
+
+    data?.forEach(item => {
+      try {
+        settingsMap[item.key] =
+          typeof item.value === 'string'
+            ? JSON.parse(item.value)
             : item.value
-        } catch {
-          settingsMap[item.key] = item.value
-        }
-      })
+      } catch {
+        settingsMap[item.key] = item.value
+      }
+    })
 
-      setSettings(prev => ({
-        ...prev,
-        ...settingsMap
-      }))
-    } catch (err) {
-      console.error('Error fetching settings:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    console.log('=== SETTINGS MAP ===')
+    console.log(settingsMap)
+    console.log('Office Location:', settingsMap.office_location)
+    console.log('Radius:', settingsMap.location_radius)
 
+    setSettings(prev => ({
+      ...prev,
+      ...settingsMap
+    }))
+
+  } catch (err) {
+    console.error('Error fetching settings:', err)
+  } finally {
+    setLoading(false)
+  }
+}, [])
   useEffect(() => {
     fetchSettings()
   }, [fetchSettings])
