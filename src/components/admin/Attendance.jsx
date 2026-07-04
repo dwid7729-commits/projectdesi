@@ -5,53 +5,77 @@ export default function Attendance() {
   const [absensi, setAbsensi] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('today')
+  const [users, setUsers] = useState([])
+
+  useEffect(() => {
+    fetchUsers()
+  }, [])
 
   useEffect(() => {
     fetchAbsensi()
-  }, [filter])
+  }, [filter, users])
+
+  const fetchUsers = async () => {
+    try {
+      const { data } = await supabase
+        .from('users')
+        .select('id, full_name, email, employee_id, department')
+        .neq('role', 'admin')
+      
+      setUsers(data || [])
+    } catch (error) {
+      console.error('Error fetching users:', error)
+    }
+  }
 
   const fetchAbsensi = async () => {
     setLoading(true)
     try {
-      // Ambil users
-      const { data: usersData } = await supabase
-        .from('users')
-        .select('id, full_name, email, employee_id, department')
-
-      // Ambil absensi
-      let query = supabase
+      // Ambil semua absensi
+      const { data: absensiData } = await supabase
         .from('absensi')
         .select('*')
         .order('scan_time', { ascending: false })
 
+      // Filter berdasarkan WIB
+      const now = new Date()
+      const nowWIB = new Date(now.getTime() + (7 * 60 * 60 * 1000))
+      const todayStr = `${nowWIB.getFullYear()}-${String(nowWIB.getMonth() + 1).padStart(2, '0')}-${String(nowWIB.getDate()).padStart(2, '0')}`
+
+      let filteredData = absensiData || []
+
       if (filter === 'today') {
-        const today = new Date()
-        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-        query = query.gte('scan_time', `${todayStr}T00:00:00`)
+        filteredData = filteredData.filter(item => {
+          const itemWIB = new Date(new Date(item.scan_time).getTime() + (7 * 60 * 60 * 1000))
+          const itemDate = `${itemWIB.getFullYear()}-${String(itemWIB.getMonth() + 1).padStart(2, '0')}-${String(itemWIB.getDate()).padStart(2, '0')}`
+          return itemDate === todayStr
+        })
       } else if (filter === 'week') {
-        const weekAgo = new Date()
-        weekAgo.setDate(weekAgo.getDate() - 7)
-        query = query.gte('scan_time', weekAgo.toISOString())
+        const weekAgo = new Date(nowWIB.getTime() - (7 * 24 * 60 * 60 * 1000))
+        filteredData = filteredData.filter(item => {
+          const itemWIB = new Date(new Date(item.scan_time).getTime() + (7 * 60 * 60 * 1000))
+          return itemWIB >= weekAgo
+        })
       } else if (filter === 'month') {
-        const monthAgo = new Date()
-        monthAgo.setMonth(monthAgo.getMonth() - 1)
-        query = query.gte('scan_time', monthAgo.toISOString())
+        const monthAgo = new Date(nowWIB.getTime() - (30 * 24 * 60 * 60 * 1000))
+        filteredData = filteredData.filter(item => {
+          const itemWIB = new Date(new Date(item.scan_time).getTime() + (7 * 60 * 60 * 1000))
+          return itemWIB >= monthAgo
+        })
       }
 
-      const { data: absensiData } = await query
-
-      // Gabungkan manual
-      const enrichedData = absensiData?.map(item => {
-        const user = usersData?.find(u => u.id === item.user_id)
+      // Gabungkan dengan user
+      const enriched = filteredData.map(item => {
+        const user = users?.find(u => u.id === item.user_id)
         return {
           ...item,
           full_name: user?.full_name || 'Unknown',
           employee_id: user?.employee_id || '-',
           department: user?.department || '-'
         }
-      }) || []
+      })
 
-      setAbsensi(enrichedData)
+      setAbsensi(enriched)
 
     } catch (error) {
       console.error('Error:', error)
@@ -60,11 +84,28 @@ export default function Attendance() {
     }
   }
 
-  const getStatusBadge = (status) => {
+  const formatWIB = (dateString) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    const wib = new Date(date.getTime() + (7 * 60 * 60 * 1000))
+    return wib.toLocaleString('id-ID', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+  }
+
+  const getStatusBadge = (status, type) => {
     if (status === 'approved' || status === 'granted') {
-      return <span className="px-3 py-1 rounded-full bg-[#e4f8ec] text-[#1a9a53] text-[11px] font-bold">Berhasil</span>
+      return <span className="px-3 py-1 rounded-full bg-[#e4f8ec] text-[#1a9a53] text-[11px] font-bold">
+        {type === 'in' ? '✅ Masuk' : '✅ Pulang'}
+      </span>
     }
-    return <span className="px-3 py-1 rounded-full bg-[#fde9ea] text-[#e0384c] text-[11px] font-bold">Gagal</span>
+    return <span className="px-3 py-1 rounded-full bg-[#fde9ea] text-[#e0384c] text-[11px] font-bold">❌ Gagal</span>
   }
 
   return (
@@ -86,7 +127,7 @@ export default function Attendance() {
             <option value="all">Semua</option>
           </select>
           <button onClick={fetchAbsensi} className="btn btn-ghost btn-sm">
-            Refresh
+            🔄 Refresh
           </button>
         </div>
       </div>
@@ -105,13 +146,14 @@ export default function Attendance() {
                   <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">Tanggal</th>
                   <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">Waktu</th>
                   <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">Lokasi</th>
+                  <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">Type</th>
                   <th className="text-left px-6 py-3 text-[12px] font-bold text-[#9aa1b0] uppercase">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {absensi.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center py-12 text-[#6b7383]">Tidak ada data absensi</td>
+                    <td colSpan="8" className="text-center py-12 text-[#6b7383]">Tidak ada data absensi</td>
                   </tr>
                 ) : (
                   absensi.map((item) => (
@@ -120,13 +162,20 @@ export default function Attendance() {
                       <td className="px-6 py-3 text-[#6b7383]">{item.employee_id}</td>
                       <td className="px-6 py-3 text-[#6b7383]">{item.department}</td>
                       <td className="px-6 py-3 text-[#6b7383]">
-                        {item.scan_time ? new Date(item.scan_time).toLocaleDateString('id-ID') : '-'}
+                        {formatWIB(item.scan_time).split(',')[0]}
                       </td>
                       <td className="px-6 py-3 text-[#6b7383]">
-                        {item.scan_time ? new Date(item.scan_time).toLocaleTimeString('id-ID') : '-'}
+                        {formatWIB(item.scan_time).split(',')[1]}
                       </td>
                       <td className="px-6 py-3 text-[#6b7383]">{item.location_name || 'Kantor'}</td>
-                      <td className="px-6 py-3">{getStatusBadge(item.status)}</td>
+                      <td className="px-6 py-3">
+                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${
+                          item.type === 'in' ? 'bg-[#eef1ff] text-[#1541c9]' : 'bg-[#fdf3dc] text-[#c78a12]'
+                        }`}>
+                          {item.type === 'in' ? 'Masuk' : 'Pulang'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3">{getStatusBadge(item.status, item.type)}</td>
                     </tr>
                   ))
                 )}

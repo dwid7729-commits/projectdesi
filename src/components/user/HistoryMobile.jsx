@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 
@@ -20,7 +19,6 @@ export default function HistoryMobile() {
     try {
       const result = []
 
-      // 1. Ambil absensi user
       const { data: absensiData } = await supabase
         .from('absensi')
         .select('*')
@@ -29,19 +27,20 @@ export default function HistoryMobile() {
 
       if (absensiData) {
         absensiData.forEach(item => {
+          const typeLabel = item.type === 'in' ? 'Masuk' : 'Pulang'
           result.push({
             id: item.id,
             type: 'absensi',
-            title: 'Absensi',
+            title: `Absen ${typeLabel}`,
             location: item.location_name || 'Kantor',
             time: item.scan_time,
             status: item.status,
-            detail: item.permit_code || '-'
+            detail: item.permit_code || '-',
+            notes: item.notes || ''
           })
         })
       }
 
-      // 2. Ambil scans user
       const { data: scansData } = await supabase
         .from('scans')
         .select('*')
@@ -57,15 +56,14 @@ export default function HistoryMobile() {
             location: item.location || 'Kantor',
             time: item.scan_time,
             status: item.status,
-            detail: item.device_id || '-'
+            detail: item.device_id || '-',
+            notes: ''
           })
         })
       }
 
-      // 3. Urutkan berdasarkan waktu
       result.sort((a, b) => new Date(b.time) - new Date(a.time))
 
-      // 4. Filter
       let filtered = result
       if (filter === 'berhasil') {
         filtered = result.filter(item => item.status === 'approved' || item.status === 'granted')
@@ -111,6 +109,28 @@ export default function HistoryMobile() {
     )
   }
 
+  // FORMAT WAKTU WIB (UTC+7) - PAKE INI
+  const formatDateTime = (dateString) => {
+    const date = new Date(dateString)
+    // Tambah 7 jam untuk WIB
+    const wibDate = new Date(date.getTime() + (7 * 60 * 60 * 1000))
+    
+    const tanggal = wibDate.toLocaleDateString('id-ID', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+    
+    const waktu = wibDate.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+    
+    return { tanggal, waktu }
+  }
+
   return (
     <div>
       <div className="pt-5 pb-1.5">
@@ -150,26 +170,32 @@ export default function HistoryMobile() {
         <div className="text-center py-12 text-[#6b7383]">Belum ada riwayat</div>
       ) : (
         <div className="space-y-3">
-          {activities.map((item) => (
-            <div key={item.id} className="bg-white rounded-[16px] p-4 shadow-sp-card">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-[12px] bg-[#eef1fb] flex items-center justify-center flex-none">
-                  {getIcon(item.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <div className="font-bold text-[14px]">{item.title}</div>
-                    {getStatusBadge(item.status)}
+          {activities.map((item) => {
+            const { tanggal, waktu } = formatDateTime(item.time)
+            return (
+              <div key={item.id} className="bg-white rounded-[16px] p-4 shadow-sp-card">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-[12px] bg-[#eef1fb] flex items-center justify-center flex-none">
+                    {getIcon(item.type)}
                   </div>
-                  <div className="text-[12px] text-[#6b7383] mt-1">{item.location}</div>
-                  <div className="text-[11px] text-[#9aa1b0] mt-0.5">
-                    {new Date(item.time).toLocaleString('id-ID')}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="font-bold text-[14px]">{item.title}</div>
+                      {getStatusBadge(item.status)}
+                    </div>
+                    <div className="text-[12px] text-[#6b7383] mt-1">{item.location}</div>
+                    <div className="text-[11px] text-[#6b7383] mt-0.5">
+                      {tanggal} - {waktu}
+                    </div>
+                    {item.notes && (
+                      <div className="text-[10px] text-[#9aa1b0] mt-1">Catatan: {item.notes}</div>
+                    )}
+                    <div className="text-[10px] text-[#9aa1b0] mt-1">ID: {item.detail}</div>
                   </div>
-                  <div className="text-[10px] text-[#9aa1b0] mt-1">ID: {item.detail}</div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

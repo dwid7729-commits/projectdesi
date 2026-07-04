@@ -64,7 +64,7 @@ export default function ResetPassword() {
                 <path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Z"/>
               </svg>
             </span>
-            joki desi
+            PT Dera Manufacturing
           </div>
           <p className="text-[#6b7383] mt-2">Create new password</p>
         </div>
@@ -148,7 +148,7 @@ export default function ResetPassword() {
         </div>
 
         <div className="text-center text-[#9aa1b0] text-[12px] leading-relaxed mt-8">
-          © 2026 joki desi. All rights reserved.
+          © 2026 PT Dera Manufacturing. All rights reserved.
         </div>
       </div>
     </div>

@@ -27,6 +27,22 @@ export default function AbsensiManagement() {
     }
   }
 
+  // Format waktu WIB (UTC+7)
+  const formatWIB = (dateString) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    const wib = new Date(date.getTime() + (7 * 60 * 60 * 1000))
+    return wib.toLocaleString('id-ID', {
+      day: 'numeric',
+      month: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+  }
+
   return (
     <div>
       <div className="flex justify-between items-start flex-wrap gap-4 mb-7">
@@ -51,8 +67,12 @@ export default function AbsensiManagement() {
               <thead className="bg-[#f8f9fc] border-b border-[#e7e9f2]">
                 <tr>
                   <th className="text-left px-6 py-4 text-[12px] font-extrabold text-[#9aa1b0] uppercase tracking-[.06em]">Employee</th>
-                  <th className="text-left px-6 py-4 text-[12px] font-extrabold text-[#9aa1b0] uppercase tracking-[.06em]">Location</th>
+                  <th className="text-left px-6 py-4 text-[12px] font-extrabold text-[#9aa1b0] uppercase tracking-[.06em]">ID</th>
+                  <th className="text-left px-6 py-4 text-[12px] font-extrabold text-[#9aa1b0] uppercase tracking-[.06em]">Department</th>
+                  <th className="text-left px-6 py-4 text-[12px] font-extrabold text-[#9aa1b0] uppercase tracking-[.06em]">Type</th>
+                  <th className="text-left px-6 py-4 text-[12px] font-extrabold text-[#9aa1b0] uppercase tracking-[.06em]">Date</th>
                   <th className="text-left px-6 py-4 text-[12px] font-extrabold text-[#9aa1b0] uppercase tracking-[.06em]">Time</th>
+                  <th className="text-left px-6 py-4 text-[12px] font-extrabold text-[#9aa1b0] uppercase tracking-[.06em]">Location</th>
                   <th className="text-left px-6 py-4 text-[12px] font-extrabold text-[#9aa1b0] uppercase tracking-[.06em]">Status</th>
                   <th className="text-left px-6 py-4 text-[12px] font-extrabold text-[#9aa1b0] uppercase tracking-[.06em]">Actions</th>
                 </tr>
@@ -60,7 +80,7 @@ export default function AbsensiManagement() {
               <tbody>
                 {absensi.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="text-center py-12 text-[#6b7383]">No attendance records</td>
+                    <td colSpan="9" className="text-center py-12 text-[#6b7383]">No attendance records</td>
                   </tr>
                 ) : (
                   absensi.map((item) => (
@@ -72,22 +92,42 @@ export default function AbsensiManagement() {
                           </span>
                           <div>
                             <div className="font-bold text-[14px]">{item.users?.full_name || 'Unknown'}</div>
-                            <div className="text-[11px] text-[#6b7383]">{item.users?.employee_id || 'N/A'}</div>
                           </div>
                         </div>
                       </td>
+                      <td className="px-6 py-4 text-[14px] text-[#6b7383]">{item.users?.employee_id || '-'}</td>
+                      <td className="px-6 py-4 text-[14px] text-[#6b7383]">{item.users?.department || '-'}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${
+                          item.type === 'in' ? 'bg-[#eef1ff] text-[#1541c9]' : 'bg-[#fdf3dc] text-[#c78a12]'
+                        }`}>
+                          {item.type === 'in' ? 'Masuk' : 'Pulang'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-[14px] text-[#6b7383]">
+                        {item.scan_time ? new Date(item.scan_time).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'numeric',
+                          year: 'numeric'
+                        }) : '-'}
+                      </td>
+                      <td className="px-6 py-4 text-[14px] text-[#6b7383]">
+                        {item.scan_time ? new Date(item.scan_time).toLocaleTimeString('id-ID', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          hour12: false
+                        }) : '-'}
+                      </td>
                       <td className="px-6 py-4">
                         <div>
-                          <div className="text-[14px]">{item.nodes?.name || item.location_name || 'Unknown'}</div>
+                          <div className="text-[14px]">{item.nodes?.name || item.location_name || 'Kantor'}</div>
                           {item.latitude && item.longitude && (
                             <div className="text-[11px] text-[#6b7383]">
-                              📍 {item.latitude}, {item.longitude}
+                              {item.latitude.toFixed(6)}, {item.longitude.toFixed(6)}
                             </div>
                           )}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 text-[14px] text-[#6b7383]">
-                        {new Date(item.scan_time).toLocaleString()}
                       </td>
                       <td className="px-6 py-4">
                         <span className={getStatusBadge(item.status)}>

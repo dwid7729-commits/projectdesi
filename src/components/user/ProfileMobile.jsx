@@ -68,7 +68,7 @@ export default function ProfileMobile() {
       </button>
 
       <div className="mt-4 text-center text-[11px] text-[#9aa1b0]">
-        joki desi v1.0.0
+        PT Dera Manufacturing v1.0.0
       </div>
     </div>
   )

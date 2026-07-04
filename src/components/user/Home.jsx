@@ -41,15 +41,15 @@ export default function Home() {
 
       if (scansError) console.error('Error scans:', scansError)
 
-      // 3. Gabungkan aktivitas (absensi + scan)
+      // 3. Gabungkan aktivitas
       const activities = []
 
-      // Tambah absensi ke aktivitas
       absensiData?.forEach(item => {
+        const typeLabel = item.type === 'in' ? 'Masuk' : 'Pulang'
         activities.push({
           id: item.id,
           type: 'absensi',
-          title: 'Absensi',
+          title: `Absen ${typeLabel}`,
           location: item.location_name || 'Kantor',
           time: item.scan_time,
           status: item.status,
@@ -57,7 +57,6 @@ export default function Home() {
         })
       })
 
-      // Tambah scan ke aktivitas
       scansData?.forEach(item => {
         activities.push({
           id: item.id,
@@ -126,6 +125,22 @@ export default function Home() {
         <path d="M14 14h3v3h-3zM14 20h3M20 14v3M17 20h4v-3"/>
       </svg>
     )
+  }
+
+  // FORMAT WAKTU WIB (UTC+7)
+  const formatWIB = (dateString) => {
+    const date = new Date(dateString)
+    // Tambah 7 jam
+    const wibDate = new Date(date.getTime() + (7 * 60 * 60 * 1000))
+    return wibDate.toLocaleString('id-ID', {
+      day: 'numeric',
+      month: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
   }
 
   return (
@@ -234,7 +249,7 @@ export default function Home() {
                       <span className="text-[11px] font-normal text-[#6b7383] ml-1">- {item.location}</span>
                     </div>
                     <div className="text-[11px] text-[#6b7383]">
-                      {new Date(item.time).toLocaleString('id-ID')}
+                      {formatWIB(item.time)}
                     </div>
                   </div>
                 </div>

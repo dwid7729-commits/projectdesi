@@ -27,7 +27,7 @@ export const mockUsers = [
   {
     id: 'admin-001',
     full_name: 'John Doe',
-    email: 'admin@joki desi.io',
+    email: 'admin@PT Dera Manufacturing.io',
     role: 'admin',
     department: 'Operations Security',
     employee_id: 'SP-2024-0113',
@@ -247,7 +247,7 @@ export const generateQRCodeSVG = (permitCode) => {
 
 export const generateMockQR = (permitCode) => {
   return {
-    qr_data: `joki desi:${permitCode}:${Date.now()}`,
+    qr_data: `PT Dera Manufacturing:${permitCode}:${Date.now()}`,
     qr_svg: generateQRCodeSVG(permitCode),
     qr_code: permitCode
   }

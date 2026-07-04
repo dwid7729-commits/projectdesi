@@ -1,6 +1,6 @@
 export default {
   app: {
-    name: "joki desi",
+    name: "PT Dera Manufacturing",
     version: "Versi 1.0.0"
   },
   home: {

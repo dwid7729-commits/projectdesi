@@ -72,7 +72,7 @@ export default function Navbar() {
               <path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Z"/>
             </svg>
           </span>
-          <span className="hidden sm:inline">joki desi</span>
+          <span className="hidden sm:inline">PT Dera Manufacturing</span>
           <span className="sm:hidden text-[14px]">SP</span>
         </Link>
         

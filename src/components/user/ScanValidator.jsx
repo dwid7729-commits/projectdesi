@@ -11,6 +11,7 @@ export default function ScanValidator() {
   const html5QrCodeRef = useRef(null)
   const scannerStartedRef = useRef(false)
   const processingRef = useRef(false)
+  const popupOpenRef = useRef(false)
 
   const [scanResult, setScanResult] = useState(null)
   const [showPopup, setShowPopup] = useState(false)
@@ -27,12 +28,11 @@ export default function ScanValidator() {
   const [isStarting, setIsStarting] = useState(false)
   const [gpsRetry, setGpsRetry] = useState(0)
 
-  const [officeLat, setOfficeLat] = useState(-6.2088)
-  const [officeLng, setOfficeLng] = useState(106.8456)
+  const [officeLat, setOfficeLat] = useState(-7.1377005)
+  const [officeLng, setOfficeLng] = useState(110.4118615)
   const [radius, setRadius] = useState(100)
   const [settingsLoaded, setSettingsLoaded] = useState(false)
 
-  // REFS
   const locationRef = useRef(location)
   const locationErrorRef = useRef(locationError)
   const isWithinRadiusRef = useRef(isWithinRadius)
@@ -40,6 +40,9 @@ export default function ScanValidator() {
   const radiusRef = useRef(radius)
   const userDataRef = useRef(userData)
   const scanCooldownUntilRef = useRef(0)
+
+  // Timezone yang dipakai untuk SEMUA tampilan waktu (jangan pernah geser epoch manual)
+  const APP_TIMEZONE = 'Asia/Jakarta'
 
   useEffect(() => { locationRef.current = location }, [location])
   useEffect(() => { locationErrorRef.current = locationError }, [locationError])
@@ -71,185 +74,102 @@ export default function ScanValidator() {
     fetchUserData()
   }, [user])
 
-  // Ambil setting lokasi - PAKE YANG INI
- // ============================
-// AMBIL SETTING DARI DATABASE
-// ============================
-useEffect(() => {
-  const fetchSettings = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("settings")
-        .select("key,value")
+  // Ambil setting lokasi
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const { data: officeData, error: officeError } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'office_location')
+          .single()
 
-      if (error) throw error
+        if (!officeError && officeData) {
+          let office = officeData.value
+          if (typeof office === 'string') office = JSON.parse(office)
+          setOfficeLat(office.lat || -7.1377005)
+          setOfficeLng(office.lng || 110.4118615)
+          console.log('Office loaded:', office)
+        }
 
-      let office = {
-        lat: -6.2088,
-        lng: 106.8456
+        const { data: radiusData, error: radiusError } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'location_radius')
+          .single()
+
+        if (!radiusError && radiusData) {
+          let radiusVal = radiusData.value
+          if (typeof radiusVal === 'string') radiusVal = JSON.parse(radiusVal)
+          setRadius(radiusVal.value || 100)
+          console.log('Radius loaded:', radiusVal)
+        }
+
+        setSettingsLoaded(true)
+
+      } catch (err) {
+        console.error('Fetch settings error:', err)
+        setSettingsLoaded(true)
       }
-
-      let radiusValue = 100
-
-      data?.forEach(item => {
-        if (item.key === "office_location") {
-          office = item.value
-        }
-
-        if (item.key === "location_radius") {
-          radiusValue = item.value?.value ?? 100
-        }
-      })
-
-      setOfficeLat(office.lat)
-      setOfficeLng(office.lng)
-      setRadius(radiusValue)
-
-      console.log("=== SETTINGS LOADED ===")
-      console.log("Office :", office)
-      console.log("Radius :", radiusValue)
-
-    } catch (err) {
-      console.error("Fetch settings:", err)
-    } finally {
-      setSettingsLoaded(true)
     }
-  }
 
-  fetchSettings()
-}, [])
+    fetchSettings()
+  }, [])
 
+  // Request GPS
+  const requestGPS = () => {
+    if (!settingsLoaded) return
 
-// ============================
-// REQUEST GPS
-// ============================
-const requestGPS = (
-  lat = officeLat,
-  lng = officeLng,
-  rad = radius
-) => {
+    setLocationError('')
 
-  if (!settingsLoaded) return
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords
+          setLocation({ latitude, longitude })
 
-  setLocationError("")
+          const dist = getDistance(latitude, longitude, officeLat, officeLng)
+          setDistance(dist)
+          setIsWithinRadius(dist <= radius)
 
-  if (!navigator.geolocation) {
-    setLocationError("Geolocation tidak didukung browser.")
-    return
-  }
-
-  navigator.geolocation.getCurrentPosition(
-
-    (pos) => {
-
-      const { latitude, longitude } = pos.coords
-
-      setLocation({
-        latitude,
-        longitude
-      })
-
-      console.log("=== GPS ===")
-      console.log({
-        officeLat: lat,
-        officeLng: lng,
-        radius: rad,
-        userLat: latitude,
-        userLng: longitude
-      })
-
-      const dist = getDistance(
-        latitude,
-        longitude,
-        lat,
-        lng
-      )
-
-      console.log("Distance :", dist)
-
-      setDistance(dist)
-      setIsWithinRadius(dist <= rad)
-
-      if (dist > rad) {
-        setLocationError(
-          `Anda ${Math.round(dist)}m dari kantor. Maksimal ${rad}m.`
-        )
-      } else {
-        setLocationError("")
-      }
-
-      setGpsRetry(0)
-    },
-
-    (err) => {
-
-      console.error("GPS Error:", err)
-
-      switch (err.code) {
-
-        case 1:
-          setLocationError(
-            "GPS ditolak. Izinkan lokasi di browser."
-          )
-          break
-
-        case 2:
-          setLocationError(
-            "GPS tidak tersedia."
-          )
-          break
-
-        case 3:
-          setLocationError(
-            "GPS timeout."
-          )
-
-          if (gpsRetry < 3) {
-            setTimeout(() => {
-              setGpsRetry(prev => prev + 1)
-            }, 2000)
+          if (dist > radius) {
+            setLocationError(`Anda ${Math.round(dist)}m dari kantor. Maksimal ${radius}m.`)
+          } else {
+            setLocationError('')
           }
-
-          break
-
-        default:
-          setLocationError(
-            "Terjadi kesalahan GPS."
-          )
-      }
-
-    },
-
-    {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0
+          setGpsRetry(0)
+        },
+        (err) => {
+          console.error('GPS Error:', err)
+          if (err.code === 1) {
+            setLocationError('GPS ditolak. Izinkan lokasi di pengaturan browser.')
+          } else if (err.code === 2) {
+            setLocationError('GPS tidak tersedia. Coba nyalakan GPS HP Anda.')
+          } else if (err.code === 3) {
+            setLocationError('GPS timeout. Coba lagi.')
+            if (gpsRetry < 3) {
+              setTimeout(() => {
+                setGpsRetry(gpsRetry + 1)
+                requestGPS()
+              }, 2000)
+            }
+          } else {
+            setLocationError('Error GPS. Coba lagi.')
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      )
+    } else {
+      setLocationError('Geolocation tidak didukung browser ini.')
     }
+  }
 
-  )
-}
+  useEffect(() => {
+    if (settingsLoaded) {
+      requestGPS()
+    }
+  }, [settingsLoaded, gpsRetry])
 
-
-// ============================
-// REQUEST GPS SETELAH SETTING SIAP
-// ============================
-useEffect(() => {
-
-  if (!settingsLoaded) return
-
-  requestGPS(
-    officeLat,
-    officeLng,
-    radius
-  )
-
-}, [
-  settingsLoaded,
-  officeLat,
-  officeLng,
-  radius,
-  gpsRetry
-])
   // Start QR Scanner
   const startScanner = async () => {
     if (isStarting || scannerStartedRef.current) return
@@ -321,6 +241,7 @@ useEffect(() => {
 
   // QR detected
   const onScanSuccess = async (decodedText) => {
+    if (popupOpenRef.current) return
     if (processingRef.current || !user) return
     if (Date.now() < scanCooldownUntilRef.current) return
 
@@ -333,8 +254,46 @@ useEffect(() => {
     // Ignore
   }
 
-  // Proses absensi
+  // Helper KRITIS: parse timestamp dari database dengan benar sebagai UTC.
+  // Kolom `scan_time` di DB kemungkinan bertipe `timestamp without time zone`,
+  // sehingga Supabase mengirim string TANPA info zona, misalnya:
+  //   "2026-07-04 15:47:05.289872"
+  // String seperti ini secara default di-parse oleh JS sebagai WAKTU LOKAL
+  // BROWSER (bukan UTC). Karena timestamp di DB sebenarnya UTC (dan browser
+  // pengguna ada di WIB/+7), ini membuat epoch yang dihasilkan mundur 7 jam
+  // dari yang seharusnya. Fungsi ini memaksa string tanpa offset untuk
+  // di-parse sebagai UTC, sesuai dengan bagaimana data itu sebenarnya disimpan.
+  const parseDbTimestamp = (input) => {
+    if (input instanceof Date) return input
+    if (!input) return new Date(NaN)
+
+    const hasTZ = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(input.trim())
+    if (hasTZ) return new Date(input)
+
+    // Tidak ada info timezone -> asumsikan ini UTC (sesuai cara data disimpan),
+    // ganti spasi jadi 'T' biar valid ISO, lalu tambahkan 'Z'.
+    const isoLike = input.trim().replace(' ', 'T')
+    return new Date(isoLike + 'Z')
+  }
+
+  // Helper: format tanggal YYYY-MM-DD berdasarkan timezone WIB (untuk perbandingan "hari yang sama")
+  // PENTING: ini hanya untuk FORMATTING/TAMPILAN, bukan untuk aritmatika epoch.
+  const dateKeyWIB = (dateInput) => {
+    return parseDbTimestamp(dateInput).toLocaleDateString('en-CA', { timeZone: APP_TIMEZONE }) // "YYYY-MM-DD"
+  }
+
+  // Helper: format jam:menit lengkap dalam WIB untuk ditampilkan ke user
+  const formatWIB = (dateInput) => {
+    return parseDbTimestamp(dateInput).toLocaleString('id-ID', { timeZone: APP_TIMEZONE })
+  }
+
+  // Proses absensi - FIX TIMEZONE
   const processAttendance = async () => {
+    if (popupOpenRef.current) {
+      processingRef.current = false
+      return
+    }
+
     if (!user) {
       navigate('/login')
       processingRef.current = false
@@ -361,6 +320,7 @@ useEffect(() => {
         message: 'Mengambil lokasi GPS... Tunggu sebentar.',
         user: baseUserInfo
       })
+      popupOpenRef.current = true
       setShowPopup(true)
       processingRef.current = false
       return
@@ -372,6 +332,7 @@ useEffect(() => {
         message: 'Aktifkan GPS/Lokasi!',
         user: baseUserInfo
       })
+      popupOpenRef.current = true
       setShowPopup(true)
       processingRef.current = false
       return
@@ -383,6 +344,7 @@ useEffect(() => {
         message: `Di luar radius! Jarak ${Math.round(currentDistance)}m, Maksimal ${currentRadius}m.`,
         user: baseUserInfo
       })
+      popupOpenRef.current = true
       setShowPopup(true)
       processingRef.current = false
       return
@@ -391,22 +353,111 @@ useEffect(() => {
     setScanning(true)
 
     try {
-      const today = new Date()
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-      const qrCode = `ABSEN-${todayStr}-${user.id.substring(0, 6).toUpperCase()}`
-
-      const { data: cekAbsenList, error: cekError } = await supabase
+      // === AMBIL ABSEN MASUK TERBARU ===
+      const { data: semuaMasuk, error: masukError } = await supabase
         .from('absensi')
-        .select('id')
+        .select('id, scan_time')
         .eq('user_id', user.id)
-        .gte('scan_time', `${todayStr}T00:00:00`)
+        .eq('type', 'in')
+        .order('scan_time', { ascending: false })
         .limit(1)
 
-      if (cekError) throw cekError
+      if (masukError) throw masukError
 
-      if (cekAbsenList && cekAbsenList.length > 0) {
-        throw new Error('Anda sudah absen hari ini!')
+      const cekMasuk = semuaMasuk?.[0] || null
+
+      console.log('📅 CEK MASUK TERBARU:', cekMasuk)
+
+      let type = 'in'
+      let typeLabel = 'Masuk'
+      let sudahJam = 0
+      let sudahMenit = 0
+
+      if (!cekMasuk) {
+        // BELUM PERNAH ABSEN MASUK → IN
+        type = 'in'
+        typeLabel = 'Masuk'
+        console.log('✅ BELUM ABSEN MASUK, LANGSUNG IN')
+      } else {
+        // UDAH PERNAH ABSEN MASUK → CEK OUT
+        console.log('⚠️ UDAH ABSEN MASUK, CEK OUT')
+
+        // CEK APAKAH SUDAH ABSEN PULANG
+        const { data: semuaOut, error: outError } = await supabase
+          .from('absensi')
+          .select('id, scan_time')
+          .eq('user_id', user.id)
+          .eq('type', 'out')
+          .order('scan_time', { ascending: false })
+          .limit(1)
+
+        if (outError) throw outError
+
+        const cekOut = semuaOut?.[0] || null
+
+        if (cekOut) {
+          // Cek apakah out terakhir jatuh di hari yang sama (WIB)
+          // FIX: bandingkan pakai format tanggal WIB langsung dari timestamp asli,
+          // JANGAN menggeser epoch dengan +7 jam manual.
+          const outDateKey = dateKeyWIB(cekOut.scan_time)
+          const todayKey = dateKeyWIB(new Date())
+
+          if (outDateKey === todayKey) {
+            throw new Error('Anda sudah absen pulang hari ini!')
+          }
+        }
+
+        // === HITUNG SELISIH JAM ===
+        // FIX UTAMA: JANGAN tambah/kurang epoch dengan 7*60*60*1000, dan JANGAN
+        // pakai `new Date(cekMasuk.scan_time)` langsung. Kolom scan_time di DB
+        // tersimpan tanpa info timezone (mis. "2026-07-04 15:47:05"), padahal
+        // nilainya adalah UTC. `new Date(...)` pada string tanpa offset akan
+        // di-parse sebagai WAKTU LOKAL BROWSER, sehingga epoch yang dihasilkan
+        // mundur 7 jam dari yang seharusnya (karena browser ada di WIB/+7).
+        // parseDbTimestamp() memaksa string itu dibaca sebagai UTC, sesuai cara
+        // penyimpanannya di database.
+        const masukTime = parseDbTimestamp(cekMasuk.scan_time).getTime()
+        const nowTime = Date.now()
+
+        const selisihMenit = Math.floor((nowTime - masukTime) / (1000 * 60))
+        sudahJam = Math.floor(selisihMenit / 60)
+        sudahMenit = selisihMenit % 60
+
+        console.log(`📊 Selisih = ${selisihMenit} menit = ${sudahJam} jam ${sudahMenit} menit`)
+
+        const MIN_WORK_MINUTES = 8 * 60
+
+        if (selisihMenit < MIN_WORK_MINUTES) {
+          const sisaMenit = MIN_WORK_MINUTES - selisihMenit
+          const sisaJam = Math.floor(sisaMenit / 60)
+          const sisaMenit2 = sisaMenit % 60
+
+          let sisaMsg = ''
+          if (sisaJam > 0 && sisaMenit2 > 0) {
+            sisaMsg = `Kurang ${sisaJam} jam ${sisaMenit2} menit lagi`
+          } else if (sisaJam > 0) {
+            sisaMsg = `Kurang ${sisaJam} jam lagi`
+          } else {
+            sisaMsg = `Kurang ${sisaMenit2} menit lagi`
+          }
+
+          throw new Error(
+            `Anda sudah bekerja ${sudahJam} jam ${sudahMenit} menit.\n` +
+            `Syarat pulang: 8 jam.\n` +
+            `${sisaMsg}`
+          )
+        }
+
+        type = 'out'
+        typeLabel = 'Pulang'
       }
+
+      // === SIMPAN ABSENSI ===
+      // FIX: format tampilan WIB langsung dari waktu sekarang, tanpa geser epoch.
+      const nowDate = new Date()
+      const wibString = formatWIB(nowDate)
+      const todayStr = dateKeyWIB(nowDate).replace(/-/g, '') // YYYYMMDD
+      const qrCode = `ABSEN-${todayStr}-${user.id.substring(0, 6).toUpperCase()}`
 
       const absensiData = {
         user_id: user.id,
@@ -415,8 +466,9 @@ useEffect(() => {
         longitude: currentLocation.longitude,
         location_name: 'Kantor',
         status: 'approved',
+        type: type,
         device_id: `DEV-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-        notes: `Absen ${new Date().toLocaleString()}`
+        notes: `${typeLabel} ${wibString}`
       }
 
       const { error: insertError } = await supabase
@@ -437,27 +489,35 @@ useEffect(() => {
       const qrDisplay = JSON.stringify({
         user: user.id,
         name: baseUserInfo.name,
-        time: new Date().toISOString(),
+        type: type,
+        time: nowDate.toISOString(),
         location: `${currentLocation.latitude}, ${currentLocation.longitude}`
       })
       setQrValueDisplay(qrDisplay)
 
+      let successMsg = `✅ Absensi ${typeLabel} Berhasil!`
+      if (type === 'out') {
+        successMsg += `\nTotal kerja: ${sudahJam} jam ${sudahMenit} menit`
+      }
+
       setScanResult({
         success: true,
-        message: 'Absensi Berhasil!',
-        time: new Date().toLocaleString('id-ID'),
+        message: successMsg,
+        time: wibString,
         location: `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`,
         user: baseUserInfo
       })
+      popupOpenRef.current = true
       setShowPopup(true)
 
     } catch (error) {
       console.error('Attendance error:', error)
       setScanResult({
         success: false,
-        message: error.message || 'Absensi Gagal!',
+        message: error.message || '❌ Absensi Gagal!',
         user: baseUserInfo
       })
+      popupOpenRef.current = true
       setShowPopup(true)
     } finally {
       setScanning(false)
@@ -522,17 +582,18 @@ useEffect(() => {
     setShowPopup(false)
     setScanResult(null)
     processingRef.current = false
+    popupOpenRef.current = false
 
     if (scanResult?.success) {
       navigate('/')
       return
     }
 
-    scanCooldownUntilRef.current = Date.now() + 2000
+    scanCooldownUntilRef.current = Date.now() + 3000
 
     setTimeout(() => {
       startScanner()
-    }, 500)
+    }, 1000)
   }
 
   const retryGPS = () => {
@@ -697,7 +758,7 @@ useEffect(() => {
               {scanResult.success ? 'Absensi Berhasil!' : 'Absensi Gagal!'}
             </h3>
 
-            <p className="text-center text-[13px] text-[#6b7383] mt-1">
+            <p className="text-center text-[13px] text-[#6b7383] whitespace-pre-line">
               {scanResult.message}
             </p>
 
