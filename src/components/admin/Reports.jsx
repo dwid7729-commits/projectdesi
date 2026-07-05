@@ -17,73 +17,89 @@ export default function Reports() {
     const nowWIB = new Date(now.getTime() + (7 * 60 * 60 * 1000))
     const defaultMonth = `${nowWIB.getFullYear()}-${String(nowWIB.getMonth() + 1).padStart(2, '0')}`
     setSelectedMonth(defaultMonth)
-    fetchUsers()
+    fetchData()
   }, [])
 
   useEffect(() => {
-    if (selectedMonth && users.length > 0) {
-      fetchMonthlyReport()
+    if (selectedMonth) {
+      fetchData()
     }
-  }, [selectedMonth, users])
+  }, [selectedMonth])
 
-  const fetchUsers = async () => {
+  const fetchData = async () => {
+    setLoading(true)
     try {
-      const { data } = await supabase
+      const { data: usersData } = await supabase
         .from('users')
         .select('id, full_name, employee_id, department')
         .neq('role', 'admin')
-      setUsers(data || [])
-    } catch (error) {
-      console.error('Error fetching users:', error)
-    }
-  }
+      setUsers(usersData || [])
 
-  const fetchMonthlyReport = async () => {
-    setLoading(true)
-    try {
-      const [year, month] = selectedMonth.split('-')
-      const startDate = `${year}-${month}-01T00:00:00`
-      const endDate = new Date(parseInt(year), parseInt(month), 0)
-      const endDateStr = `${year}-${month}-${String(endDate.getDate()).padStart(2, '0')}T23:59:59`
-
-      // Ambil semua absensi bulan ini
       const { data: absensiData } = await supabase
         .from('absensi')
         .select('*')
-        .gte('scan_time', startDate)
-        .lte('scan_time', endDateStr)
         .order('scan_time', { ascending: true })
 
-      // Konversi ke WIB dan kelompokkan per user per hari
-      const report = users.map(user => {
-        const userAbsensi = absensiData?.filter(a => a.user_id === user.id) || []
-        
-        // Kelompokkan per hari
-        const dailyMap = {}
-        userAbsensi.forEach(item => {
-          const itemWIB = new Date(new Date(item.scan_time).getTime() + (7 * 60 * 60 * 1000))
-          const dateKey = `${itemWIB.getFullYear()}-${String(itemWIB.getMonth() + 1).padStart(2, '0')}-${String(itemWIB.getDate()).padStart(2, '0')}`
-          
-          if (!dailyMap[dateKey]) {
-            dailyMap[dateKey] = { in: null, out: null }
-          }
-          if (item.type === 'in') {
-            dailyMap[dateKey].in = item
-          } else if (item.type === 'out') {
-            dailyMap[dateKey].out = item
-          }
-        })
+      const [year, month] = selectedMonth.split('-')
+      
+      // Filter absensi bulan ini (WIB)
+      const monthAbsensi = absensiData?.filter(item => {
+        if (!item.scan_time) return false
+        const itemWIB = new Date(new Date(item.scan_time).getTime() + (7 * 60 * 60 * 1000))
+        const itemYear = itemWIB.getFullYear()
+        const itemMonth = itemWIB.getMonth() + 1
+        return itemYear === parseInt(year) && itemMonth === parseInt(month)
+      }) || []
 
-        // Hitung total hari hadir dan lembur
+      // PAIRING IN-OUT PER SHIFT (BEDA HARI BOLEH)
+      const report = (usersData || []).map(user => {
+        const userAbsensi = monthAbsensi.filter(a => a.user_id === user.id)
+        
+        // Pair IN-OUT (manual pairing)
+        const shifts = []
+        const usedIds = new Set()
+        
+        // Cari IN dan OUT terdekat
+        for (const outItem of userAbsensi) {
+          if (outItem.type === 'out' && !usedIds.has(outItem.id)) {
+            // Cari IN terakhir sebelum OUT ini
+            let matchedIn = null
+            for (const inItem of userAbsensi) {
+              if (inItem.type === 'in' && !usedIds.has(inItem.id)) {
+                const inTime = new Date(inItem.scan_time)
+                const outTime = new Date(outItem.scan_time)
+                const diffMs = outTime - inTime
+                // Boleh beda hari, asal < 24 jam
+                if (diffMs > 0 && diffMs < 24 * 60 * 60 * 1000) {
+                  matchedIn = inItem
+                  break
+                }
+              }
+            }
+            
+            if (matchedIn) {
+              usedIds.add(matchedIn.id)
+              usedIds.add(outItem.id)
+              shifts.push({ in: matchedIn, out: outItem })
+            }
+          }
+        }
+        
+        // Tambah IN yang belum punya OUT
+        for (const inItem of userAbsensi) {
+          if (inItem.type === 'in' && !usedIds.has(inItem.id)) {
+            shifts.push({ in: inItem, out: null })
+          }
+        }
+
+        // Hitung total hadir dan lembur
         let totalHadir = 0
         let totalLembur = 0
-        const days = Object.keys(dailyMap)
 
-        days.forEach(date => {
-          const day = dailyMap[date]
-          if (day.in && day.out) {
-            const inWIB = new Date(new Date(day.in.scan_time).getTime() + (7 * 60 * 60 * 1000))
-            const outWIB = new Date(new Date(day.out.scan_time).getTime() + (7 * 60 * 60 * 1000))
+        shifts.forEach(shift => {
+          if (shift.in && shift.out) {
+            const inWIB = new Date(new Date(shift.in.scan_time).getTime() + (7 * 60 * 60 * 1000))
+            const outWIB = new Date(new Date(shift.out.scan_time).getTime() + (7 * 60 * 60 * 1000))
             const diffMs = outWIB.getTime() - inWIB.getTime()
             const diffJam = diffMs / (1000 * 60 * 60)
             
@@ -100,13 +116,15 @@ export default function Reports() {
           ...user,
           totalHadir,
           totalLembur: Math.round(totalLembur * 10) / 10,
-          totalDays: days.length
+          totalShifts: shifts.length
         }
       })
 
+      report.sort((a, b) => b.totalHadir - a.totalHadir)
+
       const totalHadir = report.reduce((sum, r) => sum + r.totalHadir, 0)
       const totalLembur = report.reduce((sum, r) => sum + r.totalLembur, 0)
-      const totalAbsensi = report.reduce((sum, r) => sum + r.totalDays, 0)
+      const totalAbsensi = report.reduce((sum, r) => sum + r.totalShifts, 0)
 
       setMonthlyReport(report)
       setSummary({
@@ -132,7 +150,6 @@ export default function Reports() {
     return `${monthNames[parseInt(month) - 1]} ${year}`
   }
 
-  // Generate options bulan
   const getMonthOptions = () => {
     const options = []
     const now = new Date()
@@ -162,8 +179,8 @@ export default function Reports() {
               <option key={month} value={month}>{formatMonth(month)}</option>
             ))}
           </select>
-          <button onClick={fetchMonthlyReport} className="btn btn-ghost btn-sm">
-            🔄 Refresh
+          <button onClick={fetchData} className="btn btn-ghost btn-sm">
+            Refresh
           </button>
           <button onClick={printReport} className="btn btn-primary btn-sm">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 mr-1">
@@ -180,12 +197,12 @@ export default function Reports() {
         <div className="stat-card">
           <div className="stat-label">Total Kehadiran</div>
           <div className="stat-value">{summary.totalHadir}</div>
-          <div className="text-[11px] text-[#6b7383] mt-1">hari kerja</div>
+          <div className="text-[11px] text-[#6b7383] mt-1">shift kerja</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Total Lembur</div>
           <div className="stat-value text-[#e0384c]">{summary.totalLembur} jam</div>
-          <div className="text-[11px] text-[#6b7383] mt-1">dari {summary.totalAbsensi} absensi</div>
+          <div className="text-[11px] text-[#6b7383] mt-1">dari {summary.totalAbsensi} shift</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Periode</div>
@@ -196,6 +213,14 @@ export default function Reports() {
 
       {loading ? (
         <div className="text-center py-12 text-[#6b7383]">Memuat data...</div>
+      ) : monthlyReport.length === 0 || monthlyReport.every(r => r.totalHadir === 0) ? (
+        <div className="text-center py-12 text-[#6b7383]">
+          Belum ada data absensi pada periode ini
+          <div className="text-[11px] mt-1">Pastikan karyawan sudah melakukan absensi masuk dan pulang</div>
+          <button onClick={fetchData} className="btn btn-primary btn-sm mt-4">
+            Refresh Data
+          </button>
+        </div>
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-x-auto">
@@ -211,41 +236,35 @@ export default function Reports() {
                 </tr>
               </thead>
               <tbody>
-                {monthlyReport.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="text-center py-12 text-[#6b7383]">Tidak ada data</td>
+                {monthlyReport.map((item) => (
+                  <tr key={item.id} className="border-b border-[#e7e9f2] hover:bg-[#f8f9fc]">
+                    <td className="px-6 py-3 font-semibold">{item.full_name}</td>
+                    <td className="px-6 py-3 text-[#6b7383]">{item.employee_id}</td>
+                    <td className="px-6 py-3 text-[#6b7383]">{item.department}</td>
+                    <td className="px-6 py-3">
+                      <span className="font-bold text-[#1a9a53]">{item.totalHadir}</span>
+                      <span className="text-[#6b7383] text-[11px]"> shift</span>
+                    </td>
+                    <td className="px-6 py-3">
+                      {item.totalLembur > 0 ? (
+                        <span className="text-[#e0384c] font-bold">+{item.totalLembur} jam</span>
+                      ) : (
+                        <span className="text-[#6b7383]">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-3">
+                      <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${
+                        item.totalHadir >= 20 ? 'bg-[#e4f8ec] text-[#1a9a53]' :
+                        item.totalHadir >= 10 ? 'bg-[#fdf3dc] text-[#c78a12]' :
+                        'bg-[#fde9ea] text-[#e0384c]'
+                      }`}>
+                        {item.totalHadir >= 20 ? 'Baik' :
+                         item.totalHadir >= 10 ? 'Cukup' :
+                         'Kurang'}
+                      </span>
+                    </td>
                   </tr>
-                ) : (
-                  monthlyReport.map((item) => (
-                    <tr key={item.id} className="border-b border-[#e7e9f2] hover:bg-[#f8f9fc]">
-                      <td className="px-6 py-3 font-semibold">{item.full_name}</td>
-                      <td className="px-6 py-3 text-[#6b7383]">{item.employee_id}</td>
-                      <td className="px-6 py-3 text-[#6b7383]">{item.department}</td>
-                      <td className="px-6 py-3">
-                        <span className="font-bold text-[#1a9a53]">{item.totalHadir}</span>
-                        <span className="text-[#6b7383] text-[11px]"> hari</span>
-                      </td>
-                      <td className="px-6 py-3">
-                        {item.totalLembur > 0 ? (
-                          <span className="text-[#e0384c] font-bold">+{item.totalLembur} jam</span>
-                        ) : (
-                          <span className="text-[#6b7383]">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-3">
-                        <span className={`px-3 py-1 rounded-full text-[11px] font-bold ${
-                          item.totalHadir >= 20 ? 'bg-[#e4f8ec] text-[#1a9a53]' :
-                          item.totalHadir >= 10 ? 'bg-[#fdf3dc] text-[#c78a12]' :
-                          'bg-[#fde9ea] text-[#e0384c]'
-                        }`}>
-                          {item.totalHadir >= 20 ? '✅ Baik' :
-                           item.totalHadir >= 10 ? '⚠️ Cukup' :
-                           '❌ Kurang'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>
